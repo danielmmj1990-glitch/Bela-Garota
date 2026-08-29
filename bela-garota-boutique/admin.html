@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin — Bela Garota Boutique</title>
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap site-header__bar">
+      <a class="brand" href="index.html">Bela Garota<span class="brand__dot">.</span></a>
+      <nav class="nav">
+        <div class="nav__links">
+          <a href="index.html">Catálogo</a>
+        </div>
+        <div class="nav__icons">
+          <button class="btn btn--ghost" data-logout style="display:none;">Cerrar sesión</button>
+        </div>
+      </nav>
+    </div>
+  </header>
+
+  <!-- LOGIN -->
+  <div class="login-shell" data-login-shell>
+    <div class="panel">
+      <p class="login-shell__title">Panel de administración</p>
+      <p class="login-shell__sub">Ingresá la contraseña para gestionar el catálogo.</p>
+      <form data-login-form>
+        <div class="form-row">
+          <label for="login-password">Contraseña</label>
+          <input type="password" id="login-password" data-login-password required autofocus />
+        </div>
+        <button class="btn btn--full" type="submit">Ingresar</button>
+        <p class="login-error" data-login-error></p>
+      </form>
+    </div>
+  </div>
+
+  <!-- PANEL -->
+  <div class="wrap section" data-panel-shell style="display:none;">
+    <div class="admin-toolbar">
+      <h1 class="section__title">Productos</h1>
+      <button class="btn" data-new-product>+ Nuevo producto</button>
+    </div>
+
+    <div class="panel" style="padding:0; overflow-x:auto;">
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th></th>
+            <th>Producto</th>
+            <th>Precio</th>
+            <th>Stock</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody data-admin-tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- MODAL alta / edición -->
+  <div class="modal-backdrop" data-modal-backdrop>
+    <div class="modal">
+      <div class="modal__head">
+        <span class="modal__title" data-modal-title>Nuevo producto</span>
+        <button class="modal__close" data-modal-close aria-label="Cerrar">×</button>
+      </div>
+      <form data-product-form>
+        <input type="hidden" name="id" />
+        <div class="form-row">
+          <label>Nombre</label>
+          <input type="text" name="nombre" required />
+        </div>
+        <div class="form-grid">
+          <div class="form-row">
+            <label>Categoría</label>
+            <input type="text" name="categoria" placeholder="Hombre, Mujer, Niños…" required />
+          </div>
+          <div class="form-row">
+            <label>Precio (Bs)</label>
+            <input type="number" name="precio" step="0.01" min="0" required />
+          </div>
+        </div>
+        <div class="form-grid">
+          <div class="form-row">
+            <label>Tallas (separadas por coma)</label>
+            <input type="text" name="tallas" placeholder="S,M,L,XL" />
+          </div>
+          <div class="form-row">
+            <label>Colores (separados por coma)</label>
+            <input type="text" name="colores" placeholder="Negro,Blanco" />
+          </div>
+        </div>
+        <div class="form-grid">
+          <div class="form-row">
+            <label>Stock</label>
+            <input type="number" name="stock" min="0" />
+          </div>
+          <div class="form-row">
+            <label>URL de imagen</label>
+            <input type="url" name="imagen_url" placeholder="https://…" required />
+          </div>
+        </div>
+        <div class="form-row">
+          <label>Descripción</label>
+          <textarea name="descripcion"></textarea>
+        </div>
+        <button class="btn btn--full" type="submit">Guardar</button>
+        <p class="status-msg" data-status-msg></p>
+      </form>
+    </div>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/data-demo.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/admin.js"></script>
+  <script>
+    // Muestra "Cerrar sesión" solo si ya hay password guardada.
+    document.addEventListener("DOMContentLoaded", () => {
+      if (sessionStorage.getItem("prenda_admin_pw")) {
+        document.querySelector("[data-logout]").style.display = "inline-flex";
+      }
+    });
+  </script>
+</body>
+</html>

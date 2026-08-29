@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Carrito — Bela Garota Boutique</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap site-header__bar">
+      <a class="brand" href="index.html">Bela Garota<span class="brand__dot">.</span></a>
+      <nav class="nav">
+        <div class="nav__links">
+          <a href="index.html">Catálogo</a>
+          <a href="admin.html" class="admin-link">Admin</a>
+        </div>
+        <div class="nav__icons">
+          <a class="cart-link" href="carrito.html">
+            Carrito
+            <span class="cart-badge" data-cart-badge style="display:none;">0</span>
+          </a>
+        </div>
+      </nav>
+    </div>
+  </header>
+
+  <div class="wrap receipt">
+    <h1 class="receipt__title">Tu pedido</h1>
+    <p class="receipt__sub">Revisá los productos y confirmá el pedido por WhatsApp.</p>
+
+    <div class="receipt-panel" data-cart-panel></div>
+
+    <div data-checkout-area></div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="wrap site-footer__inner">
+      <span>© <span data-year></span> Bela Garota Boutique</span>
+      <a href="index.html">← Seguir comprando</a>
+    </div>
+  </footer>
+
+  <script src="js/config.js"></script>
+  <script src="js/data-demo.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/cart.js"></script>
+  <script>
+    document.querySelector('[data-year]').textContent = new Date().getFullYear();
+
+    function escC(str) {
+      const div = document.createElement("div");
+      div.textContent = str ?? "";
+      return div.innerHTML;
+    }
+
+    function renderCarritoPagina() {
+      const panel = document.querySelector("[data-cart-panel]");
+      const checkoutArea = document.querySelector("[data-checkout-area]");
+      const carrito = obtenerCarrito();
+
+      if (carrito.length === 0) {
+        panel.innerHTML = `<div class="receipt-empty">Tu carrito está vacío. <a href="index.html">Ver catálogo →</a></div>`;
+        checkoutArea.innerHTML = "";
+        return;
+      }
+
+      panel.innerHTML = carrito
+        .map((item, i) => {
+          const opciones = [item.talla, item.color].filter(Boolean).join(" · ");
+          return `
+          <div class="receipt-item">
+            <div class="receipt-item__image">
+              <img src="${escC(item.imagen_url)}" alt="${escC(item.nombre)}" />
+            </div>
+            <div>
+              <p class="receipt-item__name">${escC(item.nombre)}</p>
+              <p class="receipt-item__meta">${escC(opciones)} · x${item.cantidad}</p>
+              <button class="receipt-item__remove" data-remove="${i}">Quitar</button>
+            </div>
+            <div class="receipt-item__price">${CONFIG.CURRENCY} ${(item.precio * item.cantidad).toFixed(2)}</div>
+          </div>`;
+        })
+        .join("") + `
+          <div class="receipt-total">
+            <span>Total</span>
+            <span>${CONFIG.CURRENCY} ${totalCarrito().toFixed(2)}</span>
+          </div>`;
+
+      panel.querySelectorAll("[data-remove]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          quitarDelCarrito(Number(btn.dataset.remove));
+          renderCarritoPagina();
+        });
+      });
+
+      checkoutArea.innerHTML = `
+        <a class="btn btn--full" href="${urlPedidoWhatsApp()}" target="_blank" rel="noopener">
+          Confirmar pedido por WhatsApp
+        </a>
+        <p class="checkout-note">
+          Al confirmar se abre WhatsApp con el detalle de tu pedido para coordinar el pago
+          y la entrega. Esta tienda todavía no tiene pasarela de pago en línea conectada.
+        </p>
+      `;
+    }
+
+    document.addEventListener("DOMContentLoaded", renderCarritoPagina);
+  </script>
+</body>
+</html>

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Producto — Bela Garota Boutique</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap site-header__bar">
+      <a class="brand" href="index.html">Bela Garota<span class="brand__dot">.</span></a>
+      <nav class="nav">
+        <div class="nav__links">
+          <a href="index.html">Catálogo</a>
+          <a href="admin.html" class="admin-link">Admin</a>
+        </div>
+        <div class="nav__icons">
+          <a class="cart-link" href="carrito.html">
+            Carrito
+            <span class="cart-badge" data-cart-badge style="display:none;">0</span>
+          </a>
+        </div>
+      </nav>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <div class="product-detail" data-product-root>
+      <p class="state-msg">Cargando producto…</p>
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="wrap site-footer__inner">
+      <span>© <span data-year></span> Bela Garota Boutique</span>
+      <a href="index.html">← Volver al catálogo</a>
+    </div>
+  </footer>
+
+  <script src="js/config.js"></script>
+  <script src="js/data-demo.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/cart.js"></script>
+  <script src="js/product.js"></script>
+  <script>document.querySelector('[data-year]').textContent = new Date().getFullYear();</script>
+</body>
+</html>
