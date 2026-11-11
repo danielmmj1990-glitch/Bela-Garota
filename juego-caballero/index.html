@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tierra del Caballero</title>
+<style>
+  body{margin:0;background:#111;color:#eee;font-family:Arial,sans-serif;display:flex;flex-direction:column;align-items:center}
+  #wrap{position:relative;margin-top:8px}
+  canvas{background:#000;image-rendering:pixelated;border:2px solid #543;display:block;max-width:100vw}
+  #hud{width:480px;max-width:100vw;font-size:13px;margin:4px 0}
+  .bar{height:14px;background:#300;border:1px solid #000;margin:2px 0;position:relative}
+  .bar>div{height:100%}
+  .bar span{position:absolute;left:4px;top:-1px;font-size:11px;color:#fff;text-shadow:1px 1px #000}
+  #log{width:480px;max-width:100vw;height:90px;overflow:auto;background:#1a1a1a;border:1px solid #444;font-size:12px;padding:3px;box-sizing:border-box}
+  #shop{display:none;position:absolute;inset:20px;background:#222e;border:2px solid #ca5;padding:8px;overflow:auto}
+  #shop button{display:block;width:100%;margin:3px 0;padding:6px;background:#432;color:#fff;border:1px solid #ca5;cursor:pointer;text-align:left}
+  #shop button:hover{background:#654}
+  #help{font-size:12px;color:#aaa;width:480px;max-width:100vw;margin:4px 0}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="c" width="480" height="352"></canvas>
+  <div id="shop"></div>
+</div>
+<div id="hud">
+  <div id="info"></div>
+  <div class="bar"><div id="hpb" style="background:#c22"></div><span id="hpt"></span></div>
+  <div class="bar" style="background:#222"><div id="xpb" style="background:#38c"></div><span id="xpt"></span></div>
+</div>
+<div id="log"></div>
+<div id="help">Mover: flechas/WASD · Atacar: clic en monstruo o Espacio (adyacente) · 1: poción · E: hablar con NPC · Guardado automático · Clic en el mapa: caminar</div>
+
+<script>
+const T=32, VW=15, VH=11, W=70, H=70;
+const cv=document.getElementById('c'), ctx=cv.getContext('2d');
+ctx.font='24px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+
+// ---------- Mapa (generado con semilla fija) ----------
+let seed=12345; function rnd(){seed=(seed*1664525+1013904223)%4294967296;return seed/4294967296}
+// tipos: 0 pasto,1 agua,2 árbol,3 piedra(pueblo),4 roca(cueva suelo),5 pared cueva,6 camino
+const map=[];
+const CX=35, CY=35; // centro del pueblo
+for(let y=0;y<H;y++){map[y]=[];for(let x=0;x<W;x++){
+  let t=0;
+  if(x<2||y<2||x>=W-2||y>=H-2) t=1;
+  else {
+    const r=rnd();
+    const d=Math.hypot(x-CX,y-CY);
+    if(d>12){ if(r<0.12) t=2; }
+    if(x>44&&y>48&&x<66&&y<66){ t=(r<0.18)?5:4; } // cueva
+    if(x>4&&x<18&&y>5&&y<16&&Math.hypot(x-11,y-10)<6) t=1; // lago
+    if(y>4&&y<30&&x>40&&x<66&&r<0.3&&d>12) t=2; // bosque denso
+  }
+  map[y][x]=t;
+}}
+// pueblo
+for(let y=CY-5;y<=CY+5;y++)for(let x=CX-6;x<=CX+6;x++)map[y][x]=3;
+// caminos
+for(let i=-30;i<=30;i++){ if(map[CY][CX+i]===0||map[CY][CX+i]===2)map[CY][CX+i]=6; if(map[CY+i]&&(map[CY+i][CX]===0||map[CY+i][CX]===2))map[CY+i][CX]=6; }
+// entrada cueva
+for(let x=40;x<=48;x++){map[49][x]=4;map[50][x]=4}
+for(let i=0;i<8;i++){map[CY+i][CX]=6}
+const safe=(x,y)=>Math.abs(x-CX)<=6&&Math.abs(y-CY)<=5;
+const walk=(x,y)=>x>=0&&y>=0&&x<W&&y<H&&![1,2,5].includes(map[y][x]);
+
+// ---------- Datos ----------
+const MON={
+  rata:   {n:'Rata',   e:'🐀',hp:20, dmg:4, xp:8,  gold:[1,4],  spd:900, zone:'pasto'},
+  arana:  {n:'Araña',  e:'🕷️',hp:35, dmg:7, xp:15, gold:[2,7],  spd:900, zone:'pasto'},
+  lobo:   {n:'Lobo',   e:'🐺',hp:70, dmg:12,xp:40, gold:[5,15], spd:700, zone:'bosque'},
+  orco:   {n:'Orco',   e:'👹',hp:130,dmg:20,xp:90, gold:[15,35],spd:900, zone:'cueva'},
+  esquel: {n:'Esqueleto',e:'💀',hp:200,dmg:28,xp:160,gold:[25,60],spd:900,zone:'cueva'},
+  dragon: {n:'Dragón', e:'🐉',hp:900,dmg:60,xp:1200,gold:[300,600],spd:1100,zone:'jefe'}
+};
+const SHOP=[
+  {n:'Espada (+6 ataque)',    price:100,slot:'weapon',val:6},
+  {n:'Espada larga (+12 atq)',price:400,slot:'weapon',val:12},
+  {n:'Hacha de guerra (+20 atq)',price:1200,slot:'weapon',val:20},
+  {n:'Escudo de madera (+2 def)',price:80,slot:'shield',val:2},
+  {n:'Escudo de acero (+5 def)',price:350,slot:'shield',val:5},
+  {n:'Armadura de cuero (+3 def)',price:150,slot:'armor',val:3},
+  {n:'Armadura de placas (+8 def)',price:900,slot:'armor',val:8},
+  {n:'Poción de vida (+80 PV)',price:25,slot:'potion',val:1},
+];
+
+// ---------- Estado ----------
+let P={x:CX,y:CY+2,lvl:1,xp:0,hp:100,gold:30,potions:3,weapon:0,armor:0,shield:0,wName:'Daga',lastHit:0};
+const maxHp=()=>100+(P.lvl-1)*25;
+const xpNeed=l=>Math.floor(40*Math.pow(l,1.8));
+try{const s=JSON.parse(localStorage.getItem('caballero_save'));if(s)P=Object.assign(P,s)}catch(e){}
+function save(){try{localStorage.setItem('caballero_save',JSON.stringify(P))}catch(e){}}
+setInterval(save,5000);
+
+let mons=[], target=null, path=[], dead=false, floats=[];
+function spawn(type,x,y){const d=MON[type];mons.push({type,x,y,sx:x,sy:y,hp:d.hp,last:0,mv:0,respawn:0})}
+function populate(){
+  mons=[];
+  for(let i=0;i<60;i++){
+    const x=3+Math.floor(rnd()*(W-6)),y=3+Math.floor(rnd()*(H-6));
+    if(!walk(x,y)||safe(x,y)||Math.hypot(x-CX,y-CY)<8)continue;
+    const inCave=map[y][x]===4;
+    if(inCave) spawn(rnd()<0.6?'orco':'esquel',x,y);
+    else if(x>40&&y<30) spawn('lobo',x,y);
+    else if(Math.hypot(x-CX,y-CY)<24) spawn(rnd()<0.5?'rata':'arana',x,y);
+    else spawn('lobo',x,y);
+  }
+  // jefe en el fondo de la cueva
+  spawn('dragon',62,62);
+}
+populate();
+
+// ---------- UI ----------
+const logEl=document.getElementById('log');
+function log(t,c){const d=document.createElement('div');d.textContent=t;if(c)d.style.color=c;logEl.appendChild(d);logEl.scrollTop=1e9;}
+function hud(){
+  const m=maxHp();
+  document.getElementById('hpb').style.width=(100*P.hp/m)+'%';
+  document.getElementById('hpt').textContent='PV '+Math.ceil(P.hp)+'/'+m;
+  const need=xpNeed(P.lvl),prev=P.lvl>1?xpNeed(P.lvl-1):0;
+  document.getElementById('xpb').style.width=(100*(P.xp-prev)/(need-prev))+'%';
+  document.getElementById('xpt').textContent='XP '+P.xp+'/'+need;
+  document.getElementById('info').textContent=`Caballero Nv.${P.lvl} · 💰${P.gold} · 🧪${P.potions} · Atq ${atk()} · Def ${def()}`;
+}
+const atk=()=>4+Math.floor(P.lvl*1.5)+P.weapon;
+const def=()=>P.armor+P.shield+Math.floor(P.lvl/3);
+
+// ---------- Tienda ----------
+const shopEl=document.getElementById('shop');
+function openShop(){
+  shopEl.style.display='block';
+  shopEl.innerHTML='<b>Mercader Tomás</b> — 💰'+P.gold+'<br>';
+  SHOP.forEach(it=>{
+    const b=document.createElement('button');
+    b.textContent=`${it.n} — ${it.price} oro`;
+    b.onclick=()=>{
+      if(P.gold<it.price){log('No tienes suficiente oro.','#f88');return}
+      if(it.slot==='potion'){P.gold-=it.price;P.potions++;}
+      else if(P[it.slot]>=it.val){log('Ya tienes algo igual o mejor.','#fa8');return}
+      else {P.gold-=it.price;P[it.slot]=it.val;}
+      log('Compraste: '+it.n,'#8f8');hud();openShop();save();
+    };
+    shopEl.appendChild(b);
+  });
+  const c=document.createElement('button');c.textContent='Cerrar';c.onclick=closeShop;shopEl.appendChild(c);
+}
+function closeShop(){shopEl.style.display='none'}
+const npc={x:CX+2,y:CY-2,e:'🧙'};
+const healer={x:CX-2,y:CY-2,e:'⛑️'};
+
+// ---------- Lógica ----------
+function monAt(x,y){return mons.find(m=>m.hp>0&&m.x===x&&m.y===y)}
+function tryMove(dx,dy){
+  if(dead)return;closeShop();
+  const nx=P.x+dx,ny=P.y+dy;
+  const m=monAt(nx,ny);
+  if(m){target=m;return}
+  if(walk(nx,ny)&&!(nx===npc.x&&ny===npc.y)&&!(nx===healer.x&&ny===healer.y)){P.x=nx;P.y=ny}
+}
+function addFloat(x,y,t,c){floats.push({x,y,t,c,life:900,born:performance.now()})}
+function gainXp(n){
+  P.xp+=n;
+  while(P.xp>=xpNeed(P.lvl)){P.lvl++;P.hp=maxHp();log('¡Subiste al nivel '+P.lvl+'!','#ff0');}
+}
+function playerAttack(now){
+  if(!target||target.hp<=0){target=null;return}
+  if(Math.abs(target.x-P.x)>1||Math.abs(target.y-P.y)>1)return;
+  if(now-P.lastHit<1000)return;
+  P.lastHit=now;
+  const dmg=Math.floor(Math.random()*(atk()+1));
+  target.hp-=dmg;
+  addFloat(target.x,target.y,dmg||'miss',dmg?'#f55':'#999');
+  if(target.hp<=0){
+    const d=MON[target.type];
+    const g=d.gold[0]+Math.floor(Math.random()*(d.gold[1]-d.gold[0]+1));
+    P.gold+=g;gainXp(d.xp);
+    log(`Mataste a ${d.n}. +${d.xp} XP, +${g} oro.`,'#8cf');
+    target.respawn=now+(target.type==='dragon'?120000:25000);
+    target=null;hud();
+  }
+}
+function monstersAct(now){
+  for(const m of mons){
+    const d=MON[m.type];
+    if(m.hp<=0){
+      if(now>m.respawn&&Math.hypot(m.sx-P.x,m.sy-P.y)>6){m.hp=d.hp;m.x=m.sx;m.y=m.sy}
+      continue;
+    }
+    const dist=Math.max(Math.abs(m.x-P.x),Math.abs(m.y-P.y));
+    if(dist<=1&&!dead&&!safe(P.x,P.y)){
+      if(now-m.last>=d.spd){
+        m.last=now;
+        const dmg=Math.max(0,Math.floor(Math.random()*(d.dmg+1))-Math.floor(Math.random()*(def()+1)));
+        P.hp-=dmg;addFloat(P.x,P.y,dmg||'0',dmg?'#fa0':'#6cf');
+        if(!target)target=m;
+        if(P.hp<=0)die();
+      }
+    } else if(dist<=6&&!safe(P.x,P.y)&&!dead){
+      if(now-m.mv>420){m.mv=now;
+        const sx=Math.sign(P.x-m.x),sy=Math.sign(P.y-m.y);
+        for(const [ax,ay] of [[sx,sy],[sx,0],[0,sy]]){
+          if((ax||ay)&&walk(m.x+ax,m.y+ay)&&!monAt(m.x+ax,m.y+ay)&&!(m.x+ax===P.x&&m.y+ay===P.y)&&!safe(m.x+ax,m.y+ay)){m.x+=ax;m.y+=ay;break}
+        }
+      }
+    }
+  }
+}
+function die(){
+  dead=true;target=null;path=[];
+  const loss=Math.floor(P.xp*0.1);P.xp-=loss;
+  log(`¡Has muerto! Pierdes ${loss} XP. Renaces en el templo.`,'#f44');
+  setTimeout(()=>{P.x=CX;P.y=CY+2;P.hp=maxHp();dead=false;hud();save()},1500);
+  hud();
+}
+function usePotion(){
+  if(P.potions<=0){log('No tienes pociones.','#f88');return}
+  if(P.hp>=maxHp())return;
+  P.potions--;const h=80;P.hp=Math.min(maxHp(),P.hp+h);addFloat(P.x,P.y,'+'+h,'#5f5');hud();
+}
+function interact(){
+  if(Math.abs(P.x-npc.x)<=1&&Math.abs(P.y-npc.y)<=1)openShop();
+  else if(Math.abs(P.x-healer.x)<=1&&Math.abs(P.y-healer.y)<=1){P.hp=maxHp();log('El sanador te cura por completo.','#8f8');hud()}
+  else log('No hay nadie cerca.');
+}
+
+// ---------- Entrada ----------
+const keys={};
+addEventListener('keydown',e=>{
+  const k=e.key;
+  if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(k))e.preventDefault();
+  if(k==='1')usePotion();
+  else if(k==='e'||k==='E')interact();
+  else if(k===' '){const m=mons.find(m=>m.hp>0&&Math.abs(m.x-P.x)<=1&&Math.abs(m.y-P.y)<=1);if(m)target=m}
+  else if(k==='Escape')closeShop();
+  keys[k]=true;
+});
+addEventListener('keyup',e=>keys[e.key]=false);
+let lastMove=0;
+function handleKeys(now){
+  if(now-lastMove<140)return;
+  let dx=0,dy=0;
+  if(keys.ArrowLeft||keys.a||keys.A)dx=-1;else if(keys.ArrowRight||keys.d||keys.D)dx=1;
+  else if(keys.ArrowUp||keys.w||keys.W)dy=-1;else if(keys.ArrowDown||keys.s||keys.S)dy=1;
+  if(dx||dy){lastMove=now;path=[];tryMove(dx,dy)}
+}
+cv.addEventListener('click',e=>{
+  const r=cv.getBoundingClientRect();
+  const sx=(e.clientX-r.left)*cv.width/r.width,sy=(e.clientY-r.top)*cv.height/r.height;
+  const tx=P.x-Math.floor(VW/2)+Math.floor(sx/T),ty=P.y-Math.floor(VH/2)+Math.floor(sy/T);
+  const m=monAt(tx,ty);
+  if(m){target=m;return}
+  target=null;
+  // camino simple en línea (BFS corto)
+  path=bfs(P.x,P.y,tx,ty);
+});
+function bfs(sx,sy,tx,ty){
+  if(!walk(tx,ty))return[];
+  const q=[[sx,sy]],prev={},key=(x,y)=>x+','+y;prev[key(sx,sy)]=null;let n=0;
+  while(q.length&&n++<4000){
+    const [x,y]=q.shift();
+    if(x===tx&&y===ty){const p=[];let c=[x,y];while(prev[key(...c)]){p.unshift(c);c=prev[key(...c)]}return p}
+    for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+      const nx=x+dx,ny=y+dy;
+      if(prev[key(nx,ny)]!==undefined||!walk(nx,ny))continue;
+      prev[key(nx,ny)]=[x,y];q.push([nx,ny]);
+    }
+  }
+  return[];
+}
+let lastPath=0;
+function followPath(now){
+  if(path.length&&now-lastPath>150&&!dead){
+    lastPath=now;const [nx,ny]=path.shift();
+    if(monAt(nx,ny)||(nx===npc.x&&ny===npc.y)||(nx===healer.x&&ny===healer.y)){path=[];return}
+    P.x=nx;P.y=ny;
+  }
+}
+
+// ---------- Dibujo ----------
+const COL={0:'#3a7d2c',1:'#2a5fb0',2:'#2a5fb0',3:'#9a9a9a',4:'#5a4a3a',5:'#2a2018',6:'#a98f5a'};
+function draw(now){
+  ctx.fillStyle='#000';ctx.fillRect(0,0,cv.width,cv.height);
+  const ox=P.x-Math.floor(VW/2),oy=P.y-Math.floor(VH/2);
+  for(let j=0;j<VH;j++)for(let i=0;i<VW;i++){
+    const x=ox+i,y=oy+j;
+    if(x<0||y<0||x>=W||y>=H)continue;
+    const t=map[y][x];
+    ctx.fillStyle=t===2?COL[0]:COL[t];
+    ctx.fillRect(i*T,j*T,T,T);
+    if((x+y)%2===0&&t!==1){ctx.fillStyle='rgba(0,0,0,.05)';ctx.fillRect(i*T,j*T,T,T)}
+    if(t===2)ctx.fillText('🌲',i*T+T/2,j*T+T/2);
+    if(t===5){ctx.fillStyle='#14100c';ctx.fillRect(i*T+2,j*T+2,T-4,T-4)}
+  }
+  const put=(x,y,e,extra)=>{const i=x-ox,j=y-oy;if(i<0||j<0||i>=VW||j>=VH)return;ctx.fillText(e,i*T+T/2,j*T+T/2+1);if(extra)extra(i*T,j*T)};
+  put(npc.x,npc.y,npc.e);put(healer.x,healer.y,healer.e);
+  put(CX,CY,'⛲');
+  for(const m of mons){
+    if(m.hp<=0)continue;
+    const d=MON[m.type];
+    put(m.x,m.y,d.e,(px,py)=>{
+      ctx.fillStyle='#000';ctx.fillRect(px+2,py,T-4,4);
+      ctx.fillStyle='#e33';ctx.fillRect(px+3,py+1,(T-6)*m.hp/d.hp,2);
+      if(m===target){ctx.strokeStyle='#f00';ctx.lineWidth=2;ctx.strokeRect(px+1,py+1,T-2,T-2)}
+    });
+  }
+  put(P.x,P.y,dead?'⚰️':'🧑');
+  // números flotantes
+  ctx.font='bold 14px sans-serif';
+  floats=floats.filter(f=>now-f.born<f.life);
+  for(const f of floats){
+    const i=f.x-ox,j=f.y-oy,a=(now-f.born)/f.life;
+    ctx.fillStyle=f.c;ctx.fillText(f.t,i*T+T/2,j*T-a*20);
+  }
+  ctx.font='24px sans-serif';
+  if(safe(P.x,P.y)){ctx.fillStyle='#0008';ctx.fillRect(0,0,150,18);ctx.font='12px sans-serif';ctx.fillStyle='#8f8';ctx.fillText('Zona segura (pueblo)',75,9);ctx.font='24px sans-serif'}
+}
+
+// ---------- Bucle ----------
+let lastReg=0;
+function loop(now){
+  handleKeys(now);followPath(now);playerAttack(now);monstersAct(now);
+  if(now-lastReg>3000&&!dead){lastReg=now;if(P.hp<maxHp())P.hp=Math.min(maxHp(),P.hp+1+Math.floor(P.lvl/5));hud()}
+  draw(now);requestAnimationFrame(loop);
+}
+hud();
+log('Bienvenido, caballero. El mercader 🧙 y el sanador ⛑️ están en el pueblo.','#fc6');
+log('Caza ratas y arañas cerca del pueblo; los lobos al este; la cueva al sureste guarda un dragón.','#aaa');
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
