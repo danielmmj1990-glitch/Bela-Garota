@@ -21,6 +21,10 @@ js/catalog.js        → Lógica de la home
 js/product.js        → Lógica del detalle de producto
 js/admin.js          → Lógica del panel de administración
 apps-script/Code.gs   → Backend a pegar en Google Apps Script
+manifest.webmanifest  → Datos de la app instalable (nombre, colores, íconos)
+sw.js                 → Service worker: permite instalarla y abrirla sin conexión
+js/pwa.js             → Registra el service worker y muestra el aviso "Instalar"
+icons/                → Íconos de la app
 ```
 
 Podés abrir `index.html` directamente en el navegador ahora mismo: vas a ver
@@ -165,6 +169,27 @@ términos generales, lo que cambia es:
 La función `construirMensajeWhatsApp()` en `js/cart.js` y el botón de
 checkout en `carrito.html` son el punto exacto donde se reemplaza el link
 de WhatsApp por la llamada a la pasarela elegida.
+
+---
+
+## App instalable (PWA)
+
+La tienda se puede instalar en el celular como una app, sin pasar por Play
+Store ni App Store. Solo funciona cuando el sitio está publicado con
+**https** (Netlify, Vercel o GitHub Pages ya lo dan); abriendo `index.html`
+como archivo local no aparece la opción de instalar.
+
+- **Android (Chrome):** al entrar aparece el aviso "Instalar". También está
+  en el menú ⋮ → *Instalar app* / *Agregar a pantalla principal*.
+- **iPhone (Safari):** botón *Compartir* → *Agregar a inicio*.
+
+Una vez instalada abre a pantalla completa con su ícono. Si no hay conexión,
+muestra el último catálogo que se cargó; para confirmar un pedido por
+WhatsApp sí hace falta internet.
+
+Para cambiar el ícono, reemplazá los PNG de `icons/` manteniendo los mismos
+nombres y tamaños. Si agregás archivos nuevos al sitio, sumalos a la lista
+`ARCHIVOS_BASE` de `sw.js` y subí el número de `VERSION`.
 
 ---
 
